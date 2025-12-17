@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "968398975714",
+    "project_id": "mentora-fcb4b",
+    "storage_bucket": "mentora-fcb4b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:968398975714:android:da00bf0699536175a0a4bb",
+        "android_client_info": {
+          "package_name": "com.abubakar.mentora"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnlhOrYRydmhM8eXtl9Gy3Uvten1PPT-Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
