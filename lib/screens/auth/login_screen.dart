@@ -1,13 +1,14 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:mentora/main_screen.dart';
 import 'package:mentora/screens/auth/auth_header.dart';
-import 'package:mentora/screens/home/home_screen.dart';
+import 'package:mentora/services/auth_service.dart';
 import 'package:mentora/widgets/auth_app_bar.dart';
 import 'package:mentora/widgets/auth_text_field.dart';
 import 'package:mentora/widgets/primary_button.dart';
 
 class LoginScreen extends StatefulWidget {
-  LoginScreen({super.key});
+  const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -30,6 +31,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  final AuthService _authService = AuthService();
+
   Future<void> login() async {
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
@@ -42,35 +45,18 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isLoading = true);
 
     try {
-      UserCredential userCredential = 
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      
+      await _authService.loginWithEmail(email: email, password: password);
 
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => HomeScreen()),
+        MaterialPageRoute(builder: (_) => const MainScreen()),
       );
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found') {
-        showError("User not found. Please register first.");
-      } else if (e.code == 'wrong-password') {
-        showError("Incorrect password.");
-      } else if (e.code == 'invalid-email') {
-        showError("Invalid email address.");
-      } else {
-        showError("Login failed. Try again.");
-      }
     } catch (e) {
-      showError("Something went wrong. Try again.");
+      showError(e.toString());
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -106,7 +92,7 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       extendBody: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: const AuthAppBar(title: "Connect.Learn.Exchange."),
+      appBar: const AuthAppBar(title: "Connect•Learn•Exchange"),
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
@@ -145,6 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 _isLoading
                     ? const Center(child: CircularProgressIndicator())
                     : PrimaryButton(text: "Login", onPressed: login),
+                const SizedBox(height: 30),
               ],
             ),
           ),

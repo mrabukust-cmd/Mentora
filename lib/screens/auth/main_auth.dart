@@ -9,17 +9,16 @@ class MainAuth extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    //-----------------------------------------get device size (For Responsiveness)--------------------------------------------------------------
     final Size size = MediaQuery.of(context).size;
+
     return Scaffold(
       extendBody: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: const AuthAppBar(title: "Connect.Learn.Exchange."),
+      appBar: const AuthAppBar(title: "Connect • Learn • Exchange"),
       body: SafeArea(
-        bottom: false,
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.all(8.0),
+            padding: const EdgeInsets.all(16),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -31,7 +30,7 @@ class MainAuth extends StatelessWidget {
                     onPressed: () {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => RegisterScreen()),
+                        MaterialPageRoute(builder: (_) => const RegisterScreen()),
                       );
                     },
                   ),
@@ -40,16 +39,15 @@ class MainAuth extends StatelessWidget {
                 SizedBox(
                   width: size.width * 0.85,
                   height: 52,
-                  child:
-                PrimaryButton(
-                  text: "Login",
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (context) => LoginScreen()),
-                    );
-                  },
-                ),
+                  child: PrimaryButton(
+                    text: "Login",
+                    onPressed: () {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
+                    },
+                  ),
                 ),
               ],
             ),

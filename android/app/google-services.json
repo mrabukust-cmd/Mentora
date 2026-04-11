@@ -12,7 +12,20 @@
           "package_name": "com.abubakar.mentora"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "968398975714-4kreo424qmbdua3m7b4gnkhpljutvj5j.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.abubakar.mentora",
+            "certificate_hash": "345b87d15a9008ca60ce6526c3aad63664595aef"
+          }
+        },
+        {
+          "client_id": "968398975714-kmrshse4cuuq80bu8o8kvb49ie7ob2ma.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCnlhOrYRydmhM8eXtl9Gy3Uvten1PPT-Y"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "968398975714-kmrshse4cuuq80bu8o8kvb49ie7ob2ma.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "968398975714-ookvuti6guv7lob5b8uajbbu0kija6a1.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.mentora"
+              }
+            }
+          ]
         }
       }
     }
