@@ -90,12 +90,15 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F7FF),
+      resizeToAvoidBottomInset: true,
       appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          Expanded(child: _buildMessageList()),
-          _buildInputBar(),
-        ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(child: _buildMessageList()),
+            _buildInputBar(),
+          ],
+        ),
       ),
     );
   }
@@ -269,8 +272,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildInputBar() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10)
-          .copyWith(bottom: MediaQuery.of(context).viewInsets.bottom + 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -291,7 +293,8 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: TextField(
                 controller: _controller,
-                maxLines: null,
+                maxLines: 4,
+                minLines: 1,
                 textCapitalization: TextCapitalization.sentences,
                 style: const TextStyle(fontSize: 15, color: Color(0xFF1A1A2E)),
                 decoration: const InputDecoration(

@@ -1,8 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:mentora/screens/chat/chat_models.dart';
-import 'package:mentora/services/home_service.dart';
-import 'package:mentora/services/notification_service.dart';
 
 class ChatService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -113,44 +112,63 @@ class ChatService {
   // ─── STREAM MESSAGES ──────────────────────────────────────
   Stream<List<MessageModel>> streamMessages(String conversationId) {
     return _messages(conversationId)
-        .orderBy('timestamp', descending: false)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => MessageModel.fromMap(
-                doc.data() as Map<String, dynamic>, doc.id))
-            .toList());
+        .map((snap) {
+          final list = snap.docs
+              .map((doc) => MessageModel.fromMap(
+                  doc.data() as Map<String, dynamic>, doc.id))
+              .toList();
+          // Sort oldest first, client-side — avoids index requirement
+          list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+          return list;
+        });
   }
 
   // ─── STREAM ALL CONVERSATIONS FOR A USER ──────────────────
+  // No orderBy — sorting client-side avoids composite index requirement
   Stream<List<ConversationModel>> streamUserConversations(String userId) {
     return _conversations
         .where('participants', arrayContains: userId)
-        .orderBy('lastMessageTime', descending: true)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((doc) => ConversationModel.fromMap(
-                doc.data() as Map<String, dynamic>, doc.id))
-            .toList());
+        .map((snap) {
+          final list = snap.docs
+              .map((doc) => ConversationModel.fromMap(
+                  doc.data() as Map<String, dynamic>, doc.id))
+              .toList();
+          // Sort by most recent message client-side
+          list.sort((a, b) => b.lastMessageTime.compareTo(a.lastMessageTime));
+          return list;
+        });
   }
 
   // ─── MARK MESSAGES AS READ ────────────────────────────────
   Future<void> markAsRead(String conversationId, String userId) async {
-    // Reset unread count for this user
-    await _conversations.doc(conversationId).update({
-      'unreadCount.$userId': 0,
-    });
+    try {
+      // Reset unread count for this user
+      await _conversations.doc(conversationId).update({
+        'unreadCount.$userId': 0,
+      });
 
-    // Mark all unread messages as read
-    final unread = await _messages(conversationId)
-        .where('isRead', isEqualTo: false)
-        .where('senderId', isNotEqualTo: userId)
-        .get();
+      // Fetch unread messages — only filter by isRead to avoid
+      // composite index requirement, then filter senderId client-side
+      final allUnread = await _messages(conversationId)
+          .where('isRead', isEqualTo: false)
+          .get();
 
-    final batch = _db.batch();
-    for (final doc in unread.docs) {
-      batch.update(doc.reference, {'isRead': true});
+      if (allUnread.docs.isEmpty) return;
+
+      final batch = _db.batch();
+      for (final doc in allUnread.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        // Only mark messages from the OTHER user as read
+        if (data['senderId'] != userId) {
+          batch.update(doc.reference, {'isRead': true});
+        }
+      }
+      await batch.commit();
+    } catch (e) {
+      debugPrint('markAsRead error (non-fatal): $e');
     }
-    await batch.commit();
   }
 
   // ─── GET TOTAL UNREAD COUNT ────────────────────────────────
@@ -170,8 +188,10 @@ class ChatService {
   }
 
   // ─── PUSH NOTIFICATIONS ───────────────────────────────────
-  /// Shows a local notification on the RECEIVER's device when a message
-  /// arrives (works when app is in foreground or background via FCM).
+  /// Queues a push notification for the receiver.
+  /// - Foreground: handled automatically by the Firestore message listener
+  ///   running on the receiver's device (NotificationService.startListeningForMessages)
+  /// - Background/killed: handled by Cloud Function reading pushNotifications collection
   Future<void> _sendPushNotification({
     required String toUserId,
     required String senderName,
@@ -179,18 +199,17 @@ class ChatService {
     required String conversationId,
   }) async {
     try {
-      // Get receiver's FCM token for remote push (background/killed state)
+      // Get receiver's FCM token
       final userDoc = await _users.doc(toUserId).get();
       final data = userDoc.data() as Map<String, dynamic>? ?? {};
       final fcmToken = data['fcmToken'] as String?;
 
-      // Queue in Firestore for Cloud Function to deliver FCM push
-      // (handles background / killed app state)
+      // Queue for Cloud Function → FCM push (background & killed app state)
       if (fcmToken != null && fcmToken.isNotEmpty) {
         await _db.collection('pushNotifications').add({
           'toUserId': toUserId,
           'fcmToken': fcmToken,
-          'title': senderName,
+          'title': '💬 $senderName',
           'body': message,
           'type': 'chat',
           'conversationId': conversationId,
@@ -198,17 +217,8 @@ class ChatService {
           'status': 'pending',
         });
       }
-
-      // Also show immediate local notification for FOREGROUND state
-      // (receiver sees it instantly if app is open but on a different screen)
-      await NotificationService().showChatNotification(
-        senderName: senderName,
-        message: message,
-        conversationId: conversationId,
-        otherUserId: toUserId,
-      );
     } catch (e) {
-      debugPrint('Push notification error (non-fatal): $e');
+      debugPrint('Push notification queue error (non-fatal): $e');
     }
   }
 

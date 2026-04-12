@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -18,6 +19,14 @@ class NotificationService {
       FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
+
+  // Firestore listeners for incoming chat messages
+  StreamSubscription? _conversationsSubscription;
+  final Map<String, StreamSubscription> _messageSubscriptions = {};
+  String? _currentUserId;
+  // Tracks the latest message timestamp per conversation to avoid
+  // showing notifications for old messages on first listen
+  final Map<String, DateTime> _lastSeenTimestamp = {};
 
   /// Initialize notification service
   Future<void> initialize() async {
@@ -126,7 +135,119 @@ class NotificationService {
         ?.createNotificationChannel(_chatChannel);
   }
 
+  // ─── FIRESTORE MESSAGE LISTENER ──────────────────────────
+  /// Start listening to all conversations the current user is in.
+  /// When a new message arrives from someone else, show a local notification.
+  /// Call this after login (from MainScreen.initState).
+  Future<void> startListeningForMessages(String userId) async {
+    _currentUserId = userId;
+
+    // Cancel any existing subscriptions first
+    await stopListeningForMessages();
+
+    // Watch all conversations where this user is a participant
+    _conversationsSubscription = FirebaseFirestore.instance
+        .collection('conversations')
+        .where('participants', arrayContains: userId)
+        .snapshots()
+        .listen((snapshot) {
+      for (final doc in snapshot.docs) {
+        final conversationId = doc.id;
+        final data = doc.data();
+        final participants = List<String>.from(data['participants'] ?? []);
+
+        // Only listen to conversations this user is actually in
+        if (!participants.contains(userId)) continue;
+
+        // Already subscribed to this conversation
+        if (_messageSubscriptions.containsKey(conversationId)) continue;
+
+        // Get participant names map to find sender name later
+        final names = Map<String, String>.from(
+          (data['participantNames'] as Map?)?.map(
+                (k, v) => MapEntry(k.toString(), v.toString()),
+              ) ??
+              {},
+        );
+
+        // Record current time — only notify for messages AFTER this moment
+        _lastSeenTimestamp[conversationId] = DateTime.now();
+
+        // Subscribe to new messages — no orderBy to avoid index requirement.
+        // We use snapshots with docChanges to detect only newly ADDED messages.
+        final sub = FirebaseFirestore.instance
+            .collection('conversations')
+            .doc(conversationId)
+            .collection('messages')
+            .snapshots()
+            .listen((msgSnap) {
+          // Only look at documents that were just added (not existing ones)
+          for (final change in msgSnap.docChanges) {
+            if (change.type != DocumentChangeType.added) continue;
+
+            final msgData = change.doc.data();
+            if (msgData == null) continue;
+
+            final senderId = msgData['senderId']?.toString() ?? '';
+            final text = msgData['text']?.toString() ?? '';
+
+            // Ignore messages sent by ME
+            if (senderId == userId) continue;
+
+            // Parse timestamp
+            DateTime msgTime;
+            final ts = msgData['timestamp'];
+            if (ts is Timestamp) {
+              msgTime = ts.toDate();
+            } else {
+              // No timestamp yet (optimistic write) — treat as now
+              msgTime = DateTime.now();
+            }
+
+            // Ignore messages older than when we started listening
+            // (prevents notifying on historical messages during initial load)
+            final lastSeen = _lastSeenTimestamp[conversationId];
+            if (lastSeen != null && msgTime.isBefore(lastSeen)) continue;
+
+            // Update last seen
+            _lastSeenTimestamp[conversationId] = msgTime;
+
+            // Get sender display name from conversation's participantNames
+            final senderName = names[senderId] ?? 'New message';
+
+            // Show local notification on THIS device
+            showChatNotification(
+              senderName: senderName,
+              message: text,
+              conversationId: conversationId,
+              otherUserId: senderId,
+            );
+          }
+        }, onError: (e) {
+          debugPrint('Message listener error for $conversationId: $e');
+        });
+
+        _messageSubscriptions[conversationId] = sub;
+      }
+    }, onError: (e) {
+      debugPrint('Conversations listener error: $e');
+    });
+  }
+
+  /// Stop all Firestore message listeners (call on logout).
+  Future<void> stopListeningForMessages() async {
+    await _conversationsSubscription?.cancel();
+    _conversationsSubscription = null;
+    for (final sub in _messageSubscriptions.values) {
+      await sub.cancel();
+    }
+    _messageSubscriptions.clear();
+    _lastSeenTimestamp.clear();
+    _currentUserId = null;
+  }
+
   /// Show a local notification for a new chat message.
+
   /// Call this from ChatService when a message is sent.
   Future<void> showChatNotification({
     required String senderName,

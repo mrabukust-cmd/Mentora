@@ -807,19 +807,17 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
       final currentUser = FirebaseAuth.instance.currentUser!;
       final reqData = widget.requestData;
 
-      // Step 1: Use conversationId already stored on the request document
-      String? conversationId = reqData['conversationId']?.toString();
+      setState(() => isLoading = true);
 
-      // Step 2: If not stored yet, re-fetch the request doc to get it
-      if (conversationId == null || conversationId.isEmpty) {
-        final reqSnap = await FirebaseFirestore.instance
-            .collection('requests')
-            .doc(widget.requestId)
-            .get();
-        conversationId = reqSnap.data()?['conversationId']?.toString();
-      }
+      // Step 1: Read conversationId directly from the request document
+      // (avoids a collection query which Firestore rules block)
+      final reqSnap = await FirebaseFirestore.instance
+          .collection('requests')
+          .doc(widget.requestId)
+          .get();
+      String? conversationId = reqSnap.data()?['conversationId']?.toString();
 
-      // Step 3: If still missing, create the conversation now
+      // Step 2: If still not set, create the conversation now
       if (conversationId == null || conversationId.isEmpty) {
         conversationId = await ChatService().createConversationOnAccept(
           requestId: widget.requestId,
@@ -828,6 +826,9 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
         );
       }
 
+      if (!mounted) return;
+      setState(() => isLoading = false);
+
       final otherUserId = widget.isSentByMe
           ? reqData['mentorId'] as String
           : reqData['requesterId'] as String;
@@ -835,7 +836,6 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
           ? reqData['mentorName']?.toString() ?? 'Mentor'
           : reqData['requesterName']?.toString() ?? 'Student';
 
-      if (!mounted) return;
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -849,7 +849,10 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
         ),
       );
     } catch (e) {
-      _showError('Could not open chat: ${e.toString()}');
+      if (mounted) {
+        setState(() => isLoading = false);
+        _showError('Could not open chat: ${e.toString()}');
+      }
     }
   }
 

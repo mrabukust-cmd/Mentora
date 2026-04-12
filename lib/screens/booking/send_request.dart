@@ -34,14 +34,20 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
   TimeOfDay? _selectedTime;
   bool _isLoading = false;
   bool _isCheckingMatch = true;
+  bool _isCheckingDuplicate = true;
 
   // Mutual match info
   MutualMatchResult? _matchResult;
+
+  // Existing active request info (if any)
+  Map<String, dynamic>? _existingRequest;
+  bool get _hasActiveRequest => _existingRequest != null;
 
   @override
   void initState() {
     super.initState();
     _checkMutualMatch();
+    _checkDuplicateRequest();
     _messageController.addListener(() => setState(() {}));
   }
 
@@ -70,6 +76,38 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
     } catch (e) {
       debugPrint('Error checking mutual match: $e');
       if (mounted) setState(() => _isCheckingMatch = false);
+    }
+  }
+
+  Future<void> _checkDuplicateRequest() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return;
+
+      // Check for any active (pending or accepted) request for
+      // the same mentor + same skill
+      final snap = await FirebaseFirestore.instance
+          .collection('requests')
+          .where('requesterId', isEqualTo: currentUser.uid)
+          .where('mentorId', isEqualTo: widget.mentorId)
+          .where('skillName', isEqualTo: widget.skillName)
+          .get();
+
+      // Filter client-side: pending or accepted = blocked
+      final active = snap.docs.where((doc) {
+        final status = doc.data()['status']?.toString() ?? '';
+        return status == 'pending' || status == 'accepted';
+      }).toList();
+
+      if (mounted) {
+        setState(() {
+          _existingRequest = active.isNotEmpty ? active.first.data() : null;
+          _isCheckingDuplicate = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking duplicate request: $e');
+      if (mounted) setState(() => _isCheckingDuplicate = false);
     }
   }
 
@@ -117,6 +155,15 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
 
     if (widget.mentorId == FirebaseAuth.instance.currentUser?.uid) {
       _showErrorDialog('You cannot send a request to yourself');
+      return;
+    }
+
+    // Guard: block if duplicate already exists
+    if (_hasActiveRequest) {
+      _showErrorDialog(
+        'You already have an active request to ${widget.mentorName} '
+        'for "${widget.skillName}". Wait for them to respond.',
+      );
       return;
     }
 
@@ -347,6 +394,31 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
 
               const SizedBox(height: 16),
 
+              // ── Duplicate request banner ───────────────────
+              if (_isCheckingDuplicate)
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    children: [
+                      SizedBox(
+                        width: 16, height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      SizedBox(width: 12),
+                      Text('Checking existing requests...',
+                          style: TextStyle(fontSize: 13)),
+                    ],
+                  ),
+                )
+              else if (_hasActiveRequest)
+                _buildDuplicateRequestBanner(),
+
+              if (_hasActiveRequest) const SizedBox(height: 8),
+
               // ── Mutual match banner ────────────────────────
               if (_isCheckingMatch)
                 Container(
@@ -492,7 +564,7 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _sendRequest,
+                  onPressed: (_isLoading || _hasActiveRequest) ? null : _sendRequest,
                   style: ElevatedButton.styleFrom(
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -525,6 +597,51 @@ class _SendRequestScreenState extends State<SendRequestScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  // ── Already sent request banner ─────────────────────────
+  Widget _buildDuplicateRequestBanner() {
+    final status = _existingRequest?['status']?.toString() ?? 'pending';
+    final isPending = status == 'pending';
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.orange.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.withOpacity(0.4), width: 1.5),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_rounded, color: Colors.orange, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isPending ? 'Request already sent' : 'Request already accepted',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.orange,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  isPending
+                      ? 'You already have a pending request to ${widget.mentorName} '
+                        'for "${widget.skillName}". Wait for their response.'
+                      : 'Your request for "${widget.skillName}" with '
+                        '${widget.mentorName} is accepted. Check your Requests tab.',
+                  style: TextStyle(fontSize: 12, color: Colors.orange[900], height: 1.4),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
