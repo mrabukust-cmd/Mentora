@@ -1,7 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:mentora/screens/chat/chat_models.dart';
-import 'package:mentora/screens/chat/chat_models.dart';
+import 'package:mentora/services/home_service.dart';
+import 'package:mentora/services/notification_service.dart';
 
 class ChatService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -20,14 +21,12 @@ class ChatService {
     required String mentorId,
     required String learnerId,
   }) async {
-    // Check if conversation already exists for this request
-    final existing = await _conversations
-        .where('requestId', isEqualTo: requestId)
-        .limit(1)
-        .get();
-
-    if (existing.docs.isNotEmpty) {
-      return existing.docs.first.id; // already exists
+    // Check if conversation already exists via the request document
+    // (avoids a collection query — uses direct doc read which rules allow)
+    final requestDoc = await _db.collection('requests').doc(requestId).get();
+    final existingConvId = requestDoc.data()?['conversationId']?.toString();
+    if (existingConvId != null && existingConvId.isNotEmpty) {
+      return existingConvId; // already exists
     }
 
     // Fetch both user profiles
@@ -46,19 +45,23 @@ class ChatService {
       lastMessageTime: DateTime.now(),
       unreadCount: {mentorId: 0, learnerId: 1}, // learner gets notification
       participantNames: {
-        mentorId: mentorData['name'] ?? 'Mentor',
-        learnerId: learnerData['name'] ?? 'Learner',
+        mentorId: '${mentorData['firstName'] ?? ''} ${mentorData['lastName'] ?? ''}'.trim().isNotEmpty
+            ? '${mentorData['firstName'] ?? ''} ${mentorData['lastName'] ?? ''}'.trim()
+            : 'Mentor',
+        learnerId: '${learnerData['firstName'] ?? ''} ${learnerData['lastName'] ?? ''}'.trim().isNotEmpty
+            ? '${learnerData['firstName'] ?? ''} ${learnerData['lastName'] ?? ''}'.trim()
+            : 'Student',
       },
       participantPhotos: {
-        mentorId: mentorData['photoUrl'] ?? '',
-        learnerId: learnerData['photoUrl'] ?? '',
+        mentorId: mentorData['profileImageUrl'] ?? '',
+        learnerId: learnerData['profileImageUrl'] ?? '',
       },
     );
 
     final docRef = await _conversations.add(conv.toMap());
 
     // Update the skill request with conversationId
-    await _db.collection('skillRequests').doc(requestId).update({
+    await _db.collection('requests').doc(requestId).update({
       'conversationId': docRef.id,
       'chatUnlocked': true,
     });
@@ -167,30 +170,46 @@ class ChatService {
   }
 
   // ─── PUSH NOTIFICATIONS ───────────────────────────────────
+  /// Shows a local notification on the RECEIVER's device when a message
+  /// arrives (works when app is in foreground or background via FCM).
   Future<void> _sendPushNotification({
     required String toUserId,
     required String senderName,
     required String message,
     required String conversationId,
   }) async {
-    // Get receiver's FCM token
-    final userDoc = await _users.doc(toUserId).get();
-    final data = userDoc.data() as Map<String, dynamic>? ?? {};
-    final fcmToken = data['fcmToken'] as String?;
+    try {
+      // Get receiver's FCM token for remote push (background/killed state)
+      final userDoc = await _users.doc(toUserId).get();
+      final data = userDoc.data() as Map<String, dynamic>? ?? {};
+      final fcmToken = data['fcmToken'] as String?;
 
-    if (fcmToken == null) return;
+      // Queue in Firestore for Cloud Function to deliver FCM push
+      // (handles background / killed app state)
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        await _db.collection('pushNotifications').add({
+          'toUserId': toUserId,
+          'fcmToken': fcmToken,
+          'title': senderName,
+          'body': message,
+          'type': 'chat',
+          'conversationId': conversationId,
+          'createdAt': FieldValue.serverTimestamp(),
+          'status': 'pending',
+        });
+      }
 
-    // Store notification in Firestore (use Cloud Functions to actually send FCM)
-    await _db.collection('notifications').add({
-      'toUserId': toUserId,
-      'fcmToken': fcmToken,
-      'title': senderName,
-      'body': message,
-      'type': 'chat',
-      'conversationId': conversationId,
-      'createdAt': DateTime.now(),
-      'sent': false,
-    });
+      // Also show immediate local notification for FOREGROUND state
+      // (receiver sees it instantly if app is open but on a different screen)
+      await NotificationService().showChatNotification(
+        senderName: senderName,
+        message: message,
+        conversationId: conversationId,
+        otherUserId: toUserId,
+      );
+    } catch (e) {
+      debugPrint('Push notification error (non-fatal): $e');
+    }
   }
 
   // ─── SAVE FCM TOKEN ───────────────────────────────────────

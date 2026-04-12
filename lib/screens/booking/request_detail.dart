@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
+import 'package:mentora/services/chat_service.dart';
+import 'package:mentora/screens/chat/chat_screen.dart';
 
 class RequestDetailsScreen extends StatefulWidget {
   final String requestId;
@@ -131,11 +133,27 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
         });
       });
 
+      // ── Create chat conversation so both users can talk ──
+      try {
+        final reqSnap = await FirebaseFirestore.instance
+            .collection('requests')
+            .doc(widget.requestId)
+            .get();
+        final reqData = reqSnap.data()!;
+        await ChatService().createConversationOnAccept(
+          requestId: widget.requestId,
+          mentorId: reqData['mentorId'],
+          learnerId: reqData['requesterId'],
+        );
+      } catch (e) {
+        debugPrint('Chat creation error (non-fatal): $e');
+      }
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Request accepted successfully!'),
+          content: Text('Request accepted! Chat is now unlocked.'),
           backgroundColor: Colors.green,
         ),
       );
@@ -783,6 +801,58 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
     );
   }
 
+  // Navigate to chat screen
+  Future<void> _openChat() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser!;
+      final reqData = widget.requestData;
+
+      // Step 1: Use conversationId already stored on the request document
+      String? conversationId = reqData['conversationId']?.toString();
+
+      // Step 2: If not stored yet, re-fetch the request doc to get it
+      if (conversationId == null || conversationId.isEmpty) {
+        final reqSnap = await FirebaseFirestore.instance
+            .collection('requests')
+            .doc(widget.requestId)
+            .get();
+        conversationId = reqSnap.data()?['conversationId']?.toString();
+      }
+
+      // Step 3: If still missing, create the conversation now
+      if (conversationId == null || conversationId.isEmpty) {
+        conversationId = await ChatService().createConversationOnAccept(
+          requestId: widget.requestId,
+          mentorId: reqData['mentorId'],
+          learnerId: reqData['requesterId'],
+        );
+      }
+
+      final otherUserId = widget.isSentByMe
+          ? reqData['mentorId'] as String
+          : reqData['requesterId'] as String;
+      final otherUserName = widget.isSentByMe
+          ? reqData['mentorName']?.toString() ?? 'Mentor'
+          : reqData['requesterName']?.toString() ?? 'Student';
+
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            conversationId: conversationId!,
+            currentUserId: currentUser.uid,
+            otherUserId: otherUserId,
+            otherUserName: otherUserName,
+            otherUserPhoto: reqData['otherUserPhoto']?.toString() ?? '',
+          ),
+        ),
+      );
+    } catch (e) {
+      _showError('Could not open chat: ${e.toString()}');
+    }
+  }
+
   Widget _buildBottomActions(String status, bool hasReview) {
     if (!widget.isSentByMe && status == 'pending') {
       // Mentor: Accept or Reject
@@ -818,17 +888,59 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
       );
     }
 
+    // ── Accepted: Chat + Mark Complete (mentor) ───────────────
     if (!widget.isSentByMe && status == 'accepted') {
-      // Mentor: Mark as Complete
-      return ElevatedButton(
-        onPressed: _completeRequest,
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _openChat,
+                  icon: const Icon(Icons.chat_bubble_rounded, size: 18),
+                  label: const Text('Chat', style: TextStyle(fontSize: 15)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    foregroundColor: const Color(0xFF6C63FF),
+                    side: const BorderSide(color: Color(0xFF6C63FF)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: _completeRequest,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text(
+                    'Mark Completed',
+                    style: TextStyle(fontSize: 15, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    // ── Accepted: Chat button (student) ──────────────────────
+    if (widget.isSentByMe && status == 'accepted') {
+      return ElevatedButton.icon(
+        onPressed: _openChat,
+        icon: const Icon(Icons.chat_bubble_rounded, size: 18),
+        label: const Text('Chat with Mentor', style: TextStyle(fontSize: 16)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-        ),
-        child: const Text(
-          'Mark as Completed',
-          style: TextStyle(fontSize: 16, color: Colors.white),
+          backgroundColor: const Color(0xFF6C63FF),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ),
       );
     }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:mentora/screens/chat/chat_models.dart';
 import 'package:mentora/services/chat_service.dart';
+import 'package:mentora/services/notification_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
@@ -34,12 +35,16 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     // Mark messages as read when opening chat
     _chatService.markAsRead(widget.conversationId, widget.currentUserId);
+    // Suppress notifications for this conversation while screen is open
+    NotificationService().setActiveChatConversation(widget.conversationId);
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _scrollController.dispose();
+    // Re-enable notifications when leaving chat
+    NotificationService().setActiveChatConversation(null);
     super.dispose();
   }
 

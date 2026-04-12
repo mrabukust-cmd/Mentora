@@ -15,10 +15,10 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
     with TickerProviderStateMixin {
   late TabController _tabController;
   final String currentUserId = FirebaseAuth.instance.currentUser!.uid;
-  
+
   // Filter options
   String selectedFilter = 'all'; // all, pending, accepted, rejected, completed
-  
+
   late AnimationController _animationController;
 
   @override
@@ -46,7 +46,9 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
     final isSmall = size.width < 360;
 
     return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0F0F1E) : const Color(0xFFF8F9FF),
+      backgroundColor: isDark
+          ? const Color(0xFF0F0F1E)
+          : const Color(0xFFF8F9FF),
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
@@ -93,40 +95,50 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
               ),
             ),
             child: SafeArea(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  SizedBox(height: isSmall ? 50 : 60),
-                  Container(
-                    padding: EdgeInsets.all(isSmall ? 14 : 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Icon(
-                      Icons.history_rounded,
-                      size: isSmall ? 32 : 40,
-                      color: Colors.white,
-                    ),
+              child: Center(
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min, // ⭐ IMPORTANT FIX
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(isSmall ? 14 : 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          Icons.history_rounded,
+                          size: isSmall ? 32 : 40,
+                          color: Colors.white,
+                        ),
+                      ),
+
+                      SizedBox(height: isSmall ? 10 : 12),
+
+                      Text(
+                        'Request History',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: isSmall ? 22 : 26,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+
+                      SizedBox(height: isSmall ? 4 : 6),
+
+                      Text(
+                        'Track all your requests',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: isSmall ? 13 : 15,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                      ),
+                    ],
                   ),
-                  SizedBox(height: isSmall ? 10 : 12),
-                  Text(
-                    'Request History',
-                    style: TextStyle(
-                      fontSize: isSmall ? 24 : 28,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  SizedBox(height: isSmall ? 4 : 6),
-                  Text(
-                    'Track all your requests',
-                    style: TextStyle(
-                      fontSize: isSmall ? 13 : 15,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -169,7 +181,7 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
         itemBuilder: (context, index) {
           final filter = filters[index];
           final isSelected = selectedFilter == filter['value'];
-          
+
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilterChip(
@@ -180,7 +192,9 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                   Icon(
                     filter['icon'] as IconData,
                     size: isSmall ? 16 : 18,
-                    color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                    color: isSelected
+                        ? Colors.white
+                        : (isDark ? Colors.white70 : Colors.black87),
                   ),
                   const SizedBox(width: 6),
                   Text(filter['label'] as String),
@@ -193,14 +207,18 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
               selectedColor: const Color(0xFF6C63FF),
               checkmarkColor: Colors.white,
               labelStyle: TextStyle(
-                color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+                color: isSelected
+                    ? Colors.white
+                    : (isDark ? Colors.white70 : Colors.black87),
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                 fontSize: isSmall ? 12 : 14,
               ),
               side: BorderSide(
                 color: isSelected
                     ? const Color(0xFF6C63FF)
-                    : (isDark ? Colors.white.withOpacity(0.1) : Colors.grey.withOpacity(0.3)),
+                    : (isDark
+                          ? Colors.white.withOpacity(0.1)
+                          : Colors.grey.withOpacity(0.3)),
               ),
             ),
           );
@@ -235,7 +253,13 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
           padding: EdgeInsets.all(isSmall ? 14 : 16),
           itemCount: requests.length,
           itemBuilder: (context, index) {
-            return _buildRequestCard(requests[index], isSent, isDark, isSmall, index);
+            return _buildRequestCard(
+              requests[index],
+              isSent,
+              isDark,
+              isSmall,
+              index,
+            );
           },
         );
       },
@@ -244,7 +268,7 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
 
   Stream<QuerySnapshot> _getRequestsStream(bool isSent) {
     final field = isSent ? 'requesterId' : 'mentorId';
-    
+
     return FirebaseFirestore.instance
         .collection('requests')
         .where(field, isEqualTo: currentUserId)
@@ -252,9 +276,11 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
         .snapshots();
   }
 
-  List<QueryDocumentSnapshot> _filterRequests(List<QueryDocumentSnapshot> docs) {
+  List<QueryDocumentSnapshot> _filterRequests(
+    List<QueryDocumentSnapshot> docs,
+  ) {
     if (selectedFilter == 'all') return docs;
-    
+
     return docs.where((doc) {
       final data = doc.data() as Map<String, dynamic>;
       return data['status'] == selectedFilter;
@@ -342,7 +368,9 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                                     style: TextStyle(
                                       fontSize: isSmall ? 15 : 17,
                                       fontWeight: FontWeight.bold,
-                                      color: isDark ? Colors.white : const Color(0xFF2D3142),
+                                      color: isDark
+                                          ? Colors.white
+                                          : const Color(0xFF2D3142),
                                     ),
                                   ),
                                   SizedBox(height: isSmall ? 2 : 4),
@@ -350,7 +378,9 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                                     skillName,
                                     style: TextStyle(
                                       fontSize: isSmall ? 12 : 14,
-                                      color: isDark ? Colors.white60 : Colors.grey[600],
+                                      color: isDark
+                                          ? Colors.white60
+                                          : Colors.grey[600],
                                     ),
                                   ),
                                 ],
@@ -360,7 +390,11 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                           ],
                         ),
                         SizedBox(height: isSmall ? 10 : 12),
-                        Divider(color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200]),
+                        Divider(
+                          color: isDark
+                              ? Colors.white.withOpacity(0.1)
+                              : Colors.grey[200],
+                        ),
                         SizedBox(height: isSmall ? 8 : 10),
                         Row(
                           children: [
@@ -376,12 +410,18 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                                   : 'Unknown date',
                               style: TextStyle(
                                 fontSize: isSmall ? 12 : 14,
-                                color: isDark ? Colors.white60 : Colors.grey[600],
+                                color: isDark
+                                    ? Colors.white60
+                                    : Colors.grey[600],
                               ),
                             ),
                             const Spacer(),
                             if (status == 'completed' && rating > 0) ...[
-                              Icon(Icons.star, size: isSmall ? 14 : 16, color: Colors.amber),
+                              Icon(
+                                Icons.star,
+                                size: isSmall ? 14 : 16,
+                                color: Colors.amber,
+                              ),
                               SizedBox(width: isSmall ? 4 : 6),
                               Text(
                                 rating.toStringAsFixed(1),
@@ -394,7 +434,8 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                             ],
                           ],
                         ),
-                        if (data['message']?.toString().isNotEmpty ?? false) ...[
+                        if (data['message']?.toString().isNotEmpty ??
+                            false) ...[
                           SizedBox(height: isSmall ? 8 : 10),
                           Container(
                             padding: EdgeInsets.all(isSmall ? 10 : 12),
@@ -408,7 +449,9 @@ class _RequestHistoryScreenState extends State<RequestHistoryScreen>
                               data['message'],
                               style: TextStyle(
                                 fontSize: isSmall ? 12 : 14,
-                                color: isDark ? Colors.white70 : Colors.grey[700],
+                                color: isDark
+                                    ? Colors.white70
+                                    : Colors.grey[700],
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
