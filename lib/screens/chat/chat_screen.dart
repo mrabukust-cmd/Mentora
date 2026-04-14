@@ -3,6 +3,10 @@ import 'package:intl/intl.dart';
 import 'package:mentora/screens/chat/chat_models.dart';
 import 'package:mentora/services/chat_service.dart';
 import 'package:mentora/services/notification_service.dart';
+import 'package:mentora/services/agora_service.dart';
+import 'package:mentora/screens/video/video_call_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
@@ -86,6 +90,43 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _startVideoCall() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return;
+
+    // Get current user name
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUser.uid)
+        .get();
+    final data = userDoc.data() ?? {};
+    final callerName =
+        '${data['firstName'] ?? ''} ${data['lastName'] ?? ''}'.trim();
+
+    final callId = await AgoraService().initiateCall(
+      callerId: currentUser.uid,
+      callerName: callerName.isNotEmpty ? callerName : 'User',
+      calleeId: widget.otherUserId,
+      calleeName: widget.otherUserName,
+      conversationId: widget.conversationId,
+    );
+
+    if (!mounted) return;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VideoCallScreen(
+          callId: callId,
+          channelName: 'mentora_${widget.conversationId}',
+          currentUserId: currentUser.uid,
+          otherUserName: widget.otherUserName,
+          isCaller: true,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -156,6 +197,15 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ],
       ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.videocam_rounded,
+              color: Color(0xFF6C63FF), size: 26),
+          tooltip: 'Video Call',
+          onPressed: _startVideoCall,
+        ),
+        const SizedBox(width: 4),
+      ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(height: 1, color: const Color(0xFFEEEEEE)),

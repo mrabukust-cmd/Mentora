@@ -387,6 +387,44 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
       }
     }
   }
+  //------------------------------------extra-----------------
+  Future<void> _startVideoCall() async {
+  try {
+    final reqData = widget.requestData;
+
+    final otherUserId = widget.isSentByMe
+        ? reqData['mentorId'] as String
+        : reqData['requesterId'] as String;
+
+    final otherUserName = widget.isSentByMe
+        ? reqData['mentorName']?.toString() ?? 'Mentor'
+        : reqData['requesterName']?.toString() ?? 'Student';
+
+    // TODO: Navigate to your Video Call Screen
+    // Example:
+    /*
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => VideoCallScreen(
+          channelId: widget.requestId,
+          otherUserId: otherUserId,
+          otherUserName: otherUserName,
+        ),
+      ),
+    );
+    */
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Video call feature coming next step'),
+      ),
+    );
+  } catch (e) {
+    _showError('Failed to start video call: $e');
+  }
+}
+//------------------------------------------------------------------------------
 
   Future<bool> _showConfirmationDialog(
     String title,
@@ -891,7 +929,7 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
       );
     }
 
-    // ── Accepted: Chat + Mark Complete (mentor) ───────────────
+    // ── Accepted: Chat + Video + Mark Complete (mentor) ────────
     if (!widget.isSentByMe && status == 'accepted') {
       return Column(
         mainAxisSize: MainAxisSize.min,
@@ -901,30 +939,39 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: _openChat,
-                  icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-                  label: const Text('Chat', style: TextStyle(fontSize: 15)),
+                  icon: const Icon(Icons.chat_bubble_rounded, size: 15),
+                  label: const Text('Chat', style: TextStyle(fontSize: 13)),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     foregroundColor: const Color(0xFF6C63FF),
                     side: const BorderSide(color: Color(0xFF6C63FF)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                flex: 2,
+                child: ElevatedButton.icon(
+                  onPressed: _startVideoCall,
+                  icon: const Icon(Icons.videocam_rounded, size: 15, color: Colors.white),
+                  label: const Text('Video', style: TextStyle(fontSize: 13, color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6C63FF),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
                 child: ElevatedButton(
                   onPressed: _completeRequest,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
-                  child: const Text(
-                    'Mark Completed',
-                    style: TextStyle(fontSize: 15, color: Colors.white),
-                  ),
+                  child: const Text('Done', style: TextStyle(fontSize: 13, color: Colors.white)),
                 ),
               ),
             ],
@@ -933,18 +980,37 @@ class _RequestDetailsScreenState extends State<RequestDetailsScreen> {
       );
     }
 
-    // ── Accepted: Chat button (student) ──────────────────────
+    // ── Accepted: Chat + Video (student) ─────────────────────
     if (widget.isSentByMe && status == 'accepted') {
-      return ElevatedButton.icon(
-        onPressed: _openChat,
-        icon: const Icon(Icons.chat_bubble_rounded, size: 18),
-        label: const Text('Chat with Mentor', style: TextStyle(fontSize: 16)),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF6C63FF),
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        ),
+      return Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: _openChat,
+              icon: const Icon(Icons.chat_bubble_rounded, size: 16),
+              label: const Text('Chat', style: TextStyle(fontSize: 14)),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                foregroundColor: const Color(0xFF6C63FF),
+                side: const BorderSide(color: Color(0xFF6C63FF)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: _startVideoCall,
+              icon: const Icon(Icons.videocam_rounded, size: 16, color: Colors.white),
+              label: const Text('Video Call', style: TextStyle(fontSize: 14, color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF6C63FF),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+            ),
+          ),
+        ],
       );
     }
 

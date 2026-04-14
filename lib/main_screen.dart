@@ -3,11 +3,15 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:mentora/screens/home/home_screen.dart';
 import 'package:mentora/screens/mentors/browse_mentors_screen.dart';
+import 'package:mentora/screens/recoding/recoding.dart';
 import 'package:mentora/screens/skills/my_skill_screen.dart';
 import 'package:mentora/request/my_request_screen.dart';
 import 'package:mentora/screens/profile/profile_screen.dart';
 import 'package:mentora/screens/chat/chat_list_screen.dart';
 import 'package:mentora/services/notification_service.dart';
+import 'package:mentora/services/agora_service.dart';
+import 'package:mentora/screens/video/incoming_call_screen.dart';
+import 'dart:async';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -20,6 +24,7 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
   final String? _uid = FirebaseAuth.instance.currentUser?.uid;
+  StreamSubscription? _callSub;
 
   @override
   void initState() {
@@ -28,11 +33,31 @@ class _MainScreenState extends State<MainScreen> {
       if (_uid == null) return;
       await NotificationService().checkPendingRequestsOnLogin();
       await NotificationService().startListeningForMessages(_uid!);
+      _listenForIncomingCalls();
+    });
+  }
+
+  void _listenForIncomingCalls() {
+    if (_uid == null) return;
+    _callSub = AgoraService().incomingCallStream(_uid!).listen((callData) {
+      if (callData == null || !mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => IncomingCallScreen(
+            callId: callData['callId'],
+            callerName: callData['callerName'] ?? 'Unknown',
+            channelName: callData['channelName'] ?? '',
+            currentUserId: _uid!,
+          ),
+        ),
+      );
     });
   }
 
   @override
   void dispose() {
+    _callSub?.cancel();
     NotificationService().stopListeningForMessages();
     super.dispose();
   }
@@ -43,6 +68,7 @@ class _MainScreenState extends State<MainScreen> {
     const MySkillsScreen(),
     const MyRequestsScreen(),
     ChatListScreen(currentUserId: _uid ?? ''),
+    const RecordingScreen(),
     const ProfileScreen(),
   ];
 
@@ -142,6 +168,11 @@ class _MainScreenState extends State<MainScreen> {
                       selected: true,
                     ),
                     label: 'Chats',
+                  ),
+                  const NavigationDestination(
+                    icon: Icon(Icons.mic_none_rounded),
+                    selectedIcon: Icon(Icons.mic_rounded),
+                    label: 'Recorder',
                   ),
                   const NavigationDestination(
                     icon: Icon(Icons.person_outline_rounded),
